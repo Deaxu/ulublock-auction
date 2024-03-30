@@ -3,7 +3,6 @@
 // iade işlemleri ne zaman yapılacak?
 // Açık artırmanın süresinin dolup dolmadığı mesajı kontrata nasıl gönderilecek (end_auction)?  
 
-
 use cosmwasm_std::{
     entry_point, to_binary, Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
 };
@@ -147,43 +146,36 @@ fn end_auction(
     info: MessageInfo,
     auction_id: u64,
 ) -> Result<Response, AuctionError> {
-    fn end_auction(
-        deps: DepsMut,
-        info: MessageInfo,
-        auction_id: u64,
-    ) -> Result<Response, AuctionError> {
 
-        let auction = AUCTIONS.load(deps.storage, &auction_id.to_string())?;
+    let auction = AUCTIONS.load(deps.storage, &auction_id.to_string())?;
 
-        if auction.status != AuctionStatus::Active {
-            return Err(AuctionError::AuctionNotActive);
-        }
-    
-        if env.block.time < auction.start_timestamp.plus_seconds(auction.duration) {
-            return Err(AuctionError::AuctionNotCompleted);
-        }
-    
-        let mut messages: Vec<CosmosMsg> = vec![];
-    
-        // En yüksek teklif sahibine NFT'yi gönderir.
-        messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: CONFIG.load(deps.storage)?.nft_addr,
-            msg: to_binary(&TransferNft {
-                recipient: auction.highest_bidder.unwrap().to_string(),
-                token_id: auction.token_id.clone(),
-            })?,
-            funds: vec![],
-        }));
-        
-        AUCTIONS.update(deps.storage, &auction_id.to_string(), |auction| -> StdResult<_> {
-            let mut auction = auction.unwrap();
-            auction.status = AuctionStatus::Completed;
-            Ok(auction)
-        })?;
-    
-        Ok(Response::new().add_messages(messages).add_attribute("method", "end_auction"))
+    if auction.status != AuctionStatus::Active {
+        return Err(AuctionError::AuctionNotActive);
     }
+
+    if env.block.time < auction.start_timestamp.plus_seconds(auction.duration) {
+        return Err(AuctionError::AuctionNotCompleted);
+    }
+
+    let mut messages: Vec<CosmosMsg> = vec![];
+
+    // En yüksek teklif sahibine NFT'yi gönderir.
+    messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: CONFIG.load(deps.storage)?.nft_addr,
+        msg: to_binary(&TransferNft {
+            recipient: auction.highest_bidder.unwrap().to_string(),
+            token_id: auction.token_id.clone(),
+        })?,
+        funds: vec![],
+    }));
     
+    AUCTIONS.update(deps.storage, &auction_id.to_string(), |auction| -> StdResult<_> {
+        let mut auction = auction.unwrap();
+        auction.status = AuctionStatus::Completed;
+        Ok(auction)
+    })?;
+
+    Ok(Response::new().add_messages(messages).add_attribute("method", "end_auction"))
 }
 
 
