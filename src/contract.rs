@@ -1,6 +1,6 @@
 // nft_contract_addr ve token_id alanları nasıl doldurulacak? (nft_contract_addr: NFT'nin kontrat adresi, token_id: NFT'nin token id'si)
-// cw20 tokenin kontrata gönderilmesi işlemi nasıl yapılacak?
-// iade işlemleri ne zaman yapılacak?
+// Cw20 tokenin kontrata gönderilmesi işlemi nasıl yapılacak?
+// İade işlemleri ne zaman yapılacak? (Açık artırma bitince mi, yeni highest bid geldiğinde mi?)
 // Açık artırmanın süresinin dolup dolmadığı mesajı kontrata nasıl gönderilecek (end_auction)?  
 
 use cosmwasm_std::{
@@ -46,12 +46,29 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> R
     }
 }
 
+/*
+!HENÜZ DENENMEDİ!
+# Deploy
+injectived tx wasm store contract.wasm --from <your-account> --chain-id="injective-888" --gas auto --gas-adjustment 1.4 --gas-prices "10inj" -y
+
+# Instantiate
+injectived tx wasm instantiate <code-id> '{"count": 100}' --from <your-account> --label "my first contract" --chain-id="injective-888" --amount 50000inj --gas auto --gas-adjustment 1.4 --gas-prices "10inj" -y
+
+# Execute
+injectived tx wasm execute <contract-address> '{"start_auction": {"name": "Auction 1", "start_timestamp": "1630000000", "nft_contract_addr": " ", "token_id": " ", "duration": "3600", "min_price": "1000000"}}' --from <your-account> --chain-id="injective-888" --gas auto --gas-prices "10inj" --broadcast-mode block
+
+injectived tx wasm execute <contract-address> '{"place_bid": {"auction_id": "1", "bid_amount": "1500000"}}' --from <your-account> --chain-id="injective-888" --gas auto --gas-prices "10inj" --broadcast-mode block
+
+ */
+
 fn start_auction(
     deps: DepsMut,
     info: MessageInfo,
     env: Env,
     name: String,
     start_timestamp: u64,
+    nft_contract_addr: Addr,
+    token_id: String,
     duration: u64,
     min_price: Uint128,
 ) -> Result<Response, AuctionError> {
@@ -125,12 +142,10 @@ fn place_bid(
     // CW20 tokenin kontrata gönderilmesi işlemi. Gerçekten çalışacak mı bu şekilde kontrol edilmeli. Örnekleri araştırılmalı.
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: CONFIG.load(deps.storage)?.cw20_addr,
-        msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
-            owner: info.sender.to_string(),
-            recipient: deps.api.addr_canonicalize(&config.contract_addr)?,
+        msg: to_binary(&Cw20ExecuteMsg::Transfer {
+            recipient: CONFIG.load(deps.storage)?.contract_addr,
             amount: bid_amount,
         })?,
-        funds: vec![],
     }));
 
     auction.bids.push(bid);
@@ -159,23 +174,38 @@ fn end_auction(
 
     let mut messages: Vec<CosmosMsg> = vec![];
 
-    // En yüksek teklif sahibine NFT'yi gönderir.
-    messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: CONFIG.load(deps.storage)?.nft_addr,
-        msg: to_binary(&TransferNft {
-            recipient: auction.highest_bidder.unwrap().to_string(),
-            token_id: auction.token_id.clone(),
-        })?,
-        funds: vec![],
-    }));
-    
-    AUCTIONS.update(deps.storage, &auction_id.to_string(), |auction| -> StdResult<_> {
-        let mut auction = auction.unwrap();
-        auction.status = AuctionStatus::Completed;
-        Ok(auction)
-    })?;
+    if let Some(highest_bidder) = auction.highest_bidder {
+        messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: CONFIG.load(deps.storage)?.nft_addr,
+            msg: to_binary(&TransferNft {
+                recipient: highest_bidder.to_string(),
+                token_id: auction.token_id.clone(),
+            })?,
+            funds: vec![],
+        }));
+    }
 
-    Ok(Response::new().add_messages(messages).add_attribute("method", "end_auction"))
+    // En yüksek teklif hariç diğer tüm teklif sahiplerine token iadeleri
+    if let Some(_) = auction.highest_bid {
+        for bid in auction.bids.iter().filter(|b| b.bidder != highest_bidder) {
+            messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: CONFIG.load(deps.storage)?.cw20_addr,
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: bid.bidder.to_string(),
+                    amount: bid.amount,
+                })?,
+                funds: vec![],
+            }));
+        }
+    }
+
+    // Auction verilerini güncelle ve sakla
+    auction.status = AuctionStatus::Closed;
+    AUCTIONS.save(deps.storage, &auction_id.to_string(), &auction)?;
+
+    Ok(Response::new()
+        .add_messages(messages)
+        .add_attribute("action", "close_auction"))
 }
 
 
@@ -199,5 +229,3 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         },
     }
 }*/
-
-
