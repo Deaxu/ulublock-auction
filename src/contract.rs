@@ -2,6 +2,7 @@
 // Cw20 tokenin kontrata gönderilmesi işlemi nasıl yapılacak?
 // İade işlemleri ne zaman yapılacak? (Açık artırma bitince mi, yeni highest bid geldiğinde mi?)
 // Açık artırmanın süresinin dolup dolmadığı mesajı kontrata nasıl gönderilecek (end_auction)?  
+// Ok(Response:: ... nft ve token işlemlerinin başarılı olup olmadığını nasıl döndürecek?
 
 use cosmwasm_std::{
     entry_point, to_binary, Addr, BankMsg, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
@@ -58,7 +59,6 @@ injectived tx wasm instantiate <code-id> '{"count": 100}' --from <your-account> 
 injectived tx wasm execute <contract-address> '{"start_auction": {"name": "Auction 1", "start_timestamp": "1630000000", "nft_contract_addr": " ", "token_id": " ", "duration": "3600", "min_price": "1000000"}}' --from <your-account> --chain-id="injective-888" --gas auto --gas-prices "10inj" --broadcast-mode block
 
 injectived tx wasm execute <contract-address> '{"place_bid": {"auction_id": "1", "bid_amount": "1500000"}}' --from <your-account> --chain-id="injective-888" --gas auto --gas-prices "10inj" --broadcast-mode block
-
  */
 
 fn start_auction(
@@ -82,11 +82,21 @@ fn start_auction(
 
     // NFT'yi kontrata gönder. Gerçekten çalışacak mı bu şekilde kontrol edilmeli. Örnekleri araştırılmalı.
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        msg: to_binary(&TransferNft {
-            recipient: auction.contract_addr.to_string(),
-            token_id: auction.token_id.clone(),
-        })?,
+        contract_addr: nft_contract_address.clone(),
         funds: vec![],
+        msg: to_binary(&Approve {
+            spender: _env.contract.address.to_string(),
+            token_id: id.clone(),
+        })?,
+    }));
+
+    message.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: nft_contract_address,
+        funds: vec![],
+        msg: to_binary(&TransferNft {
+            recipient: String::from(_env.contract.address.as_str()),
+            token_id: id,
+        })?,
     }));
 
     let auction = Auction {
@@ -174,6 +184,7 @@ fn end_auction(
 
     let mut messages: Vec<CosmosMsg> = vec![];
 
+    // En yüksek teklifin veren kişiye NFT gönderimi
     if let Some(highest_bidder) = auction.highest_bidder {
         messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: CONFIG.load(deps.storage)?.nft_addr,

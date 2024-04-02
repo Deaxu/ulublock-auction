@@ -24,10 +24,10 @@ pub enum AuctionError {
     #[error("Auction has already been completed")]
     AuctionAlreadyCompleted,
 
-    #[error("")]
+    #[error("Invalid start timestamp. It must be greater than the current block time")]
     InvalidStartTimestamp,
 
-    #[error("")]
+    #[error("Invalid duration. It must be greater than 0")]
     InvalidDuration,
 
     #[error("Invalid auction duration. It must be between {min_duration} and {max_duration}")]
