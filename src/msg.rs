@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InstantiateMsg {
-    
+    pub cw20_addr: String, // Açık artırma teklifleri için kullanılacak CW20 token adresi eklenmeli
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

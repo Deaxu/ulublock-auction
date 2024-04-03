@@ -82,23 +82,22 @@ fn start_auction(
 
 
     // NFT'yi kontrata gönder. Gerçekten çalışacak mı bu şekilde kontrol edilmeli. Örnekleri araştırılmalı.
-    messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: nft_contract_address.clone(),
-        funds: vec![],
-        msg: to_binary(&Approve {
-            spender: _env.contract.address.to_string(),
-            token_id: id.clone(),
-        })?,
-    }));
-
-    message.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: nft_contract_address,
-        funds: vec![],
-        msg: to_binary(&TransferNft {
-            recipient: String::from(_env.contract.address.as_str()),
-            token_id: id,
-        })?,
-    }));
+    let messages = vec![messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: nft_contract_address.clone(),
+            funds: vec![],
+            msg: to_binary(&Approve {
+                spender: _env.contract.address.to_string(),
+                token_id: id.clone(),
+            })?,
+        })),
+        message.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: nft_contract_address,
+            funds: vec![],
+            msg: to_binary(&TransferNft {
+                recipient: String::from(_env.contract.address.as_str()),
+                token_id: id,
+            })?,
+        }))];
 
     let auction = Auction {
         id: AUCTIONS.count(deps.storage)? + 1,
@@ -117,6 +116,7 @@ fn start_auction(
     AUCTIONS.save(deps.storage, &auction.id.to_string(), &auction)?;
 
     Ok(Response::new()
+    .add_messages(messages)
     .add_attribute("method", "start_auction")
     .add_attribute("auction_id", auction.id.to_string())
     .add_attribute("owner", info.sender.to_string())
@@ -165,7 +165,7 @@ fn place_bid(
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: CONFIG.load(deps.storage)?.cw20_addr,
         msg: to_binary(&Cw20ExecuteMsg::Transfer {
-            recipient: CONFIG.load(deps.storage)?.contract_addr,
+            recipient: info.sender.to_string(),
             amount: bid_amount,
         })?,
     }));
@@ -211,7 +211,6 @@ fn end_auction(
                 recipient: highest_bidder.to_string(),
                 token_id: auction.token_id.clone(),
             })?,
-            funds: vec![],
         }));
     }
 
@@ -224,7 +223,6 @@ fn end_auction(
                     recipient: bid.bidder.to_string(),
                     amount: bid.amount,
                 })?,
-                funds: vec![],
             }));
         }
     }
@@ -242,7 +240,7 @@ fn end_auction(
         .add_attribute("highest_bid", auction.highest_bid.unwrap().to_string())
 }
 
-// QUERY
+// Query işlemleri
 #[entry_point]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {

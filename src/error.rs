@@ -36,8 +36,8 @@ pub enum AuctionError {
     #[error("There is no winner for this auction")]
     NoWinner,
 
-    #[error("There is no winner for this auction")]
-    OwnerCannotBid
+    #[error("Owner cannot bid on their own auction")]
+    OwnerCannotBid,
 
     #[error("Unauthorized")]
     Unauthorized,
