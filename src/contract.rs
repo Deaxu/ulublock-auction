@@ -80,6 +80,7 @@ fn start_auction(
         return Err(AuctionError::InvalidStartTimestamp);
     }
 
+
     // NFT'yi kontrata gönder. Gerçekten çalışacak mı bu şekilde kontrol edilmeli. Örnekleri araştırılmalı.
     messages.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: nft_contract_address.clone(),
@@ -115,7 +116,14 @@ fn start_auction(
 
     AUCTIONS.save(deps.storage, &auction.id.to_string(), &auction)?;
 
-    Ok(Response::new().add_attribute("method", "start_auction").add_attribute("auction_id", auction.id.to_string()))
+    Ok(Response::new()
+    .add_attribute("method", "start_auction")
+    .add_attribute("auction_id", auction.id.to_string())
+    .add_attribute("owner", info.sender.to_string())
+    .add_attribute("start_timestamp", start_timestamp.to_string())
+    .add_attribute("duration", duration.to_string())
+    .add_attribute("min_price", min_price.to_string())
+    .add_attribute("status", auction.status.to_string()))
 }
 
 fn place_bid(
@@ -126,6 +134,10 @@ fn place_bid(
 ) -> Result<Response, AuctionError> {
 
     let mut auction = AUCTIONS.load(deps.storage, &auction_id.to_string())?;
+
+    if owner == info.sender {
+        return Err(AuctionError::OwnerCannotBid);
+    }
 
     if auction.status != AuctionStatus::Active {
         return Err(AuctionError::AuctionNotActive);
@@ -161,9 +173,16 @@ fn place_bid(
     auction.bids.push(bid);
     auction.highest_bidder = Some(info.sender.clone());
     auction.highest_bid = Some(bid_amount_value);
+
     AUCTIONS.save(deps.storage, &auction_id.to_string(), &auction)?;
 
-    Ok(Response::new().add_attribute("method", "place_bid"))
+    Ok(Response::new()
+    .add_attribute("action", "place_bid")
+    .add_attribute("auction_id", auction_id.to_string())
+    .add_attribute("bidder", info.sender.to_string())
+    .add_attribute("bid_amount", bid_amount.to_string())
+    .add_attribute("highest_bidder", auction.highest_bidder.unwrap().to_string()
+    .add_attribute("highest_bid", auction.highest_bid.unwrap().to_string())))
 }
 
 fn end_auction(
@@ -212,31 +231,36 @@ fn end_auction(
 
     // Auction verilerini güncelle ve sakla
     auction.status = AuctionStatus::Closed;
+
     AUCTIONS.save(deps.storage, &auction_id.to_string(), &auction)?;
 
     Ok(Response::new()
         .add_messages(messages)
         .add_attribute("action", "close_auction"))
+        .add_attribute("auction_id", auction_id.to_string())
+        .add_attribute("highest_bidder", auction.highest_bidder.unwrap().to_string())
+        .add_attribute("highest_bid", auction.highest_bid.unwrap().to_string())
 }
 
-
-
-
-
-
-
-
-
-
-// Acelesi yok halledilir
-/* 
+// QUERY
 #[entry_point]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::ListAuctions {} => list_auctions(deps),
+        QueryMsg::ListAuctions {} => listAuctions(deps),
 
         QueryMsg::AuctionDetails { auction_id } => {
-            query_auction_details(deps, auction_id)
+            queryAuctionDetails(deps, auction_id)
         },
     }
-}*/
+}
+
+// Under Maintence
+fn listAuctions(deps: Deps) -> StdResult<Binary> {
+    
+}
+
+fn queryAuctionDetails(deps: Deps, auction_id: u64) -> StdResult<Binary> {
+    let auction = AUCTIONS.load(deps.storage, &auction_id.to_string())?;
+
+    to_binary(&AuctionDetailsResponse { auction })
+}

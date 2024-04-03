@@ -40,4 +40,3 @@ pub struct Auction {
     pub highest_bid: Option<u128>,
     pub status: AuctionStatus,
 }
-
